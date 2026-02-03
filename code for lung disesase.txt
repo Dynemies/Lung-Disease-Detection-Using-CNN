@@ -1,0 +1,62 @@
+import tensorflow as tf
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Dropout
+from tensorflow.keras.models import Model
+from tensorflow.keras.optimizers import Adam
+
+# 1. SETUP DATA GENERATORS (With Augmentation to prevent overfitting)
+train_datagen = ImageDataGenerator(
+    rescale=1./255,
+    rotation_range=15,      # Rotate slightly
+    zoom_range=0.2,         # Zoom in/out
+    horizontal_flip=True,   # Flip left/right
+    fill_mode='nearest'
+)
+
+val_datagen = ImageDataGenerator(rescale=1./255)
+
+# REPLACE 'TRAIN_PATH' and 'VAL_PATH' with your actual folder paths
+# Example: "C:/Users/user/Pictures/Screenshots/Lung_Project/data/train"
+training_set = train_datagen.flow_from_directory(
+    r"C:\Users\user\Pictures\Screenshots\Lung_Project\Data\train", 
+    target_size=(150, 150),
+    batch_size=32,
+    class_mode='binary'
+)
+
+test_set = val_datagen.flow_from_directory(
+    r"C:\Users\user\Pictures\Screenshots\Lung_Project\Data\test",
+    target_size=(150, 150),
+    batch_size=32,
+    class_mode='binary'
+)
+
+# 2. LOAD PRE-TRAINED MOBILENETV2 (The "Smarter Brain")
+base_model = MobileNetV2(weights='imagenet', include_top=False, input_shape=(150, 150, 3))
+
+# Freeze the base model (so we don't ruin its pre-learned patterns)
+base_model.trainable = False
+
+# 3. ADD NEW LAYERS FOR LUNG DETECTION
+x = base_model.output
+x = GlobalAveragePooling2D()(x)
+x = Dense(128, activation='relu')(x)
+x = Dropout(0.3)(x) # Helps prevent overfitting
+predictions = Dense(1, activation='sigmoid')(x)
+
+model = Model(inputs=base_model.input, outputs=predictions)
+
+# 4. COMPILE AND TRAIN
+model.compile(optimizer=Adam(learning_rate=0.0001), loss='binary_crossentropy', metrics=['accuracy'])
+
+print("Starting Training... This might take a few minutes!")
+history = model.fit(
+    training_set,
+    epochs=10,  # Increase to 15 or 20 for even better results
+    validation_data=test_set
+)
+
+# 5. SAVE THE NEW MODEL
+model.save('lung_disease_model.h5')
+print("Model Saved! Move this new file to your website folder.")
